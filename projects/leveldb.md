@@ -43,3 +43,8 @@ leveldb是一个写性能十分优秀的存储引擎，是典型的LSM树(Log St
 > leveldb的skiplist 仅支持单线程写入（修改），多线程读, rocksdb 为了提高写入效率实现了支持多线程插入的skiplist
 
 * leveldb skiplist线程安全分析： 
+
+### snapshot
+
+* leveldb通过sequencenumber来实现快照隔离， memtable中存储的数据包括用户插入的user_key,以及插入时的序号sequence_number(单调递增，类似于时间戳), memtable中的数据按照user_key升序，sequence_number降序存储，如果某个写操作获取的sequence_number在读操作的sequence_number之后的话，他一定不会被读到。
+* 假设当前全局sequence的值为x， 这时进行的leveldb的写操作的sequence_number则为x + 1，但是写操作并不会马上修改全局sequence的值，而是在本次写操作结束后再将其修改为x + y, y为本次写操作的key-value对。如果在此次写操作进行过程中，有读操作发生，那么读操作获取的sequence为x，必定会小于正在进行中的写操作的sequence，因此不会读到写操作中间的内容，这就是读写快照隔离。leveldb可以通过快照隔离来实现多次操作的原子插入。
