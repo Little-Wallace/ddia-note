@@ -9,6 +9,7 @@
 * [论文笔记](/papers/README.md)
   * [google file system](/papers/gfs.md)
   * [bigtable](/papers/bigtable.md)
+  * [percolator](/papers/percolator.md)
 * [项目笔记](/projects/README.md)
   * [leveldb](/projects/leveldb.md)
 
