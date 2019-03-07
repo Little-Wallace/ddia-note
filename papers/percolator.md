@@ -29,9 +29,7 @@ bool UpdateDocument(Document doc) {
 
 ![Percolator](./percolator_0.jpeg)
 
-> 初始时，Bob的账户上有10美元，数据内容记在data这一列；write这一列则记录了该行当前的数据版本。接下来，Bob发生了一笔转账，现在账户数据变成了3美元，如下图
-
-![Percolator_2](./percolator_1.jpeg)
+> 初始时，Bob的账户上有10美元，数据内容记在data这一列；write这一列则记录了该行当前的数据版本。接下来，Bob发生了一笔转账，现在账户数据变成了3美元。
 
 > 该事务T执行时，会先往lock这一列写入带当前时间戳的锁primary，然后写入当前时间戳的最新数据，但此时旧的数据10美元并没有被覆盖，如果另外一个并发事务G访问该Tablet，只要G的时间戳小于T的时间戳，那么他就不会查到锁primary，也不会查到未提交的数据3美元。当T提交时，会将write这一列记录的最新版本从data@5变更为data@7, 这样之后的事务就可以查到该次更改了。
 
