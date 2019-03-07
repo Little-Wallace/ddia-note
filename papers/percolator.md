@@ -154,7 +154,7 @@ TT.after(t); //返回True，如果t已经发生过了
 TT.before(t). //返回True，如果t尚未发生
 ```
 
-* spanner没有像Percolator那样基于Bigtable来存储多余的元信息，而是提供了如下的接口保证了MVCC。锁的存储有单独的服务。Percolator通过Prewrite来检测写冲突，Spanner则是通过两阶段加锁，确保读写事务开始前都拥有相关数据的锁
+* spanner没有像Percolator那样基于Bigtable来存储多余的元信息，而是提供了如下的接口保证了MVCC。锁的存储有单独的服务。Percolator是乐观锁，通过Prewrite来检测写冲突，一但检测到局部冲突则事务整体回滚，Spanner则是悲观锁，通过两阶段加锁，确保读写事务开始前都拥有相关数据的锁，若锁被占用则阻塞直到事务超时。
 
 ```code
 (key:string, timestamp:int64) → string
@@ -165,8 +165,7 @@ TT.before(t). //返回True，如果t尚未发生
 ### spanner与percolator的不同
 
 * 为什么spanner不需要write列？
-  * 假设有一个事务T，需要修改paxos group A、B、C，其中A为coordinator。现在客户端向ABC发起了事务T的prepare，ABC分别给事务T分配了prepare timestamp t(A1), t(B1), t(C1)。 同时有一个事务G向paxos group BC发送了prepare请求，得到了时间戳t(B2), t(C2)。 由于网络延迟，导致了t(B1) < t(B2)但是t(C1) > t(C2)，由于paxos group会在prepare之前先尝试加锁，事务T会在C被阻塞住，而事务G会在B被阻塞住，因此形成了死锁。当发生死锁时，后开始的事务G会被放弃。
-  * 假设有一个事务T向paxos group ABC发起了prepare，这时有一个稍晚的事务G向group B发起了prepare，并且比T更早达到，那么G会获取锁并且阻塞住
+  * 因为Percolator为乐观锁，data列写入的数据可能被回滚，因此需要write列来标记数据真正被提交的版本。 而spanner为悲观锁，只要prepare阶段成功，commit阶段提交的写入就一定是数据真实被写入的版本。
 
 
 
