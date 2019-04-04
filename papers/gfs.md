@@ -21,8 +21,10 @@
 * 命名空间的变更是由master单机完成的（包括文件的删除和创建以及移动），命名空间锁保证了原子性和正确性。
 * 单个客户端写文件时，所有chunk server都写入成功后才会在master 元数据中写入成功， 并返回给客户端
 * 多个客户端并发写相同的文件时，primary chunk server会对写操作进行排序，然后通知其他副本的chunk server按照排序的结果执行，最终只有一个客户端会写入成功，但不能确定是哪个客户端。 所有chunk server的数据都是一致的
+  * 实际上目前的dfs实现中，多个客户端并发写同一个文件，通常会先分配一个临时的文件名，然后在写入完成以后由master进行原子MOVE操作，先写入完成的那个任务会成功
 * 单个客户端append record时，如果append操作失败，有部分副本chunk server没有写入完成，那么客户端重试时，之前失败的chunk server会填充padding，然后在所有的chunk server上重新append这份record，并返回最后一次append成功时的写入的offset。 所以append操作可能会造成chunk server中的文件副本不一致，但是append操作返回的offet读到的数据一定是一致，因此需要应用层记录每次record的索引（offset），或者对该文件的每次record进行校验。
 * 多个客户端并发append record，参加上两条，由于primary chunk server会对操作进行排序后再广播，因此仍然是defined interspersed with inconsistent
+
 
 ### 租约
 
