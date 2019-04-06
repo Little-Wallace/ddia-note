@@ -35,4 +35,83 @@ T=Concat(f(S[i]&(2^x-1),x)) + OtherCompress(j+(S[j]>>x) | S[j]>=2^x)
 * 由于索引的解压实际上是发生在查询过程中的，因此解压速度直接关系到查询性能。
 > New PForDelta算法解压时分为正常部分和异常部分的解压。异常部分需要将异常数据的高位依据间隔补到正常部分解压出来的数组中，不能使用SIMD指令，而正常部分只是将一系列按相同的framebit位存储的数据顺序提取到数组中，完全可以使用SIMD指令，因此我们只针对正常部分进行优化，优化的指令集是128位的sse4指令集
 
+* 在这里仅以framebit为4的情况进行举例说明，伪代码如下
+
+```c++
+// 注：实际工业运用中，考虑到cpu的流水线处理，通常会做不同程度的循环展开，这里为了节省代码行数，做了简化处理。
+void pack(uint32_t* dest, const uint32_t* src, uint32_t n)
+{
+    for (uint32_t i = 0; i < n; i += 8) {
+        for (uint32_t j = 0; j < 8; j ++) {
+            dest[i >> 3] |= (src[i + j] & 15) << (j * 4);
+        }
+    }
+}
+
+void unpack(uint32_t* dest, const uint32_t* src, uint32_t n)
+{
+    for (uint32_t i = 0; i < n; i += 1) {
+        for (uint32_t j = 0; j < 8; j ++) {
+            dest[(i << 3) | j] = src[i] >> (j * 4) & 15;
+        }
+    }
+}
+
+```
+* 在unpack这个函数中，假如我们把dest和src都换成以字节为单位的数组，那么则有以下伪代码：
+
+```c++
+
+void unpack(unsigned char* dest, const unsigned char* src, uint32_t n)
+{
+    for (uint32_t i = 0; i < n; i += 2) {
+        // 这里假设char数组中，头部存储的uint32_t的低位。
+        dest[i << 3] = src[i] & 15;
+        dest[i << 3 | 4] = src[i] >> 4 & 15;
+        dest[(i + 1) << 3] = src[i + 1] & 15;
+        dest[(i + 1) << 3 | 4] = src[i + 1] >> 4 & 15;
+    }
+}
+```
+
+* 那么我们先做把`dest[i*8:i*8+16]`当作一个向量，利用CPU提供的SIMD指令来进行计算，代码如下。
+
+```c++
+void unpack_simd(uint32_t* dest, const unsigned char* src, uint32_t n)
+{
+    __m128i* vector_m128i = (__m128i*)src;
+    for (uint32_t i = 0; i < n; i += 128) {
+        __m128i data = _mm_loadu_si128(vector_m128i);
+        // 为了加速CPU流水线计算，此处应展开循环，为省略代码故未展开
+        for (uint32_t j = 0; j < 8; j ++) {
+            smid_calculate(data, dest, i * 2);
+        }
+        vector_m128i ++;
+    }
+}
+
+void smid_calculate(__m128i data, uint32_t*& result, unsigned int offset)
+{
+    __m128i shuffle = _mm_set_epi8(0xFF, 0xFF, 0xFF, offset+1, 0xFF, 0xFF, 0xFF, offset+1,
+        0xFF, 0xFF, 0xFF, offset, 0xFF, 0xFF, 0xFF, offset);
+    // 现构造序列A为{0, 0, 0, s[i+1],  0, 0, 0, s[i+1], 0, 0, 0, s[i], 0, 0, 0, s[i]};
+    __m128i A = _mm_shuffle_epi8(data, shuffle);
+    // 构造序列B为{0, 0, 0, 15<<4,  0, 0, 0, 15, 0, 0, 0, 15<<4, 0, 0, 0, 15};
+    static __m128i B  = _mm_set_epi8 (0x00, 0x00, 0x00, 0xF0,
+        0x00, 0x00, 0x00, 0x0F, 0x00, 0x00, 0x00, 0xF0, 0x00, 0x00, 0x00, 0x0F);
+    // 构造乘法MASK序列C为{0, 0, 0, 1, 0, 0, 0, 16, 0, 0, 0, 1, 0, 0, 0, 16};
+    static __m128i C  = _mm_set_epi32 (0x01, 0x10, 0x01, 0x10);
+    
+    // 可得A&B*C为{0, 0, 0, s[i+1]&(15<<4),  0, 0, 0, (s[i+1]&15)<<4, 0, 0, 0, s[i]&(15<<4), 0, 0, 0, (s[i]&15)<<4};
+    __m128i result_mul = _mm_mullo_epi32(_mm_and_si128(A, B), C);
+    
+    // 整体右移4位,可得A&B*C>>4为{0, 0, 0, (s[i+1]>>4)&15,  0, 0, 0, s[i+1]&15, 0, 0, 0, (s[i]>>4)&15, 0, 0, 0, s[i]&15};
+    __m128i result_s = _mm_srli_epi32(result_mul, 4);
+    
+    // 翻转上述得到的序列即为dest[i*8:i*8+16]
+    _mm_storeu_si128((__m128i*)result, result_s);
+    result = result + 4;
+}
+
+```
 
