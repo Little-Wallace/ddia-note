@@ -15,4 +15,4 @@
   * [raft](/papers/raft.md)
 * [项目笔记](/projects/README.md)
   * [leveldb](/projects/leveldb.md)
-
+  * [倒排索引压缩](/projects/new_pfor_delta.md)
