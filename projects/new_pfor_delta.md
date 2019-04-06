@@ -84,7 +84,7 @@ void unpack_simd(uint32_t* dest, const unsigned char* src, uint32_t n)
         __m128i data = _mm_loadu_si128(vector_m128i);
         // 为了加速CPU流水线计算，此处应展开循环，为省略代码故未展开
         for (uint32_t j = 0; j < 8; j ++) {
-            smid_calculate(data, dest, i * 2);
+            smid_calculate(data, dest, j * 2);
         }
         vector_m128i ++;
     }
