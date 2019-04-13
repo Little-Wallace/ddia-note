@@ -36,23 +36,26 @@ leveldb是一个写性能十分优秀的存储引擎，是典型的LSM树(Log St
 
 ### snapshot
 
+* 未被释放的snapshot以链表的形式存储在db中，每次compaction的时候，不会删除snapshot之后的数据。
 * leveldb通过sequencenumber来实现快照隔离， memtable中存储的数据包括用户插入的user_key,以及插入时的序号sequence_number(单调递增，类似于时间戳), memtable中的数据按照user_key升序，sequence_number降序存储，如果某个写操作获取的sequence_number在读操作的sequence_number之后的话，他一定不会被读到。
-* 假设当前全局sequence的值为x， 这时进行的leveldb的写操作的sequence_number则为x + 1，但是写操作并不会马上修改全局sequence的值，而是在本次写操作结束后再将其修改为x + y, y为本次写操作的key-value对。如果在此次写操作进行过程中，有读操作发生，那么读操作获取的sequence为x，必定会小于正在进行中的写操作的sequence，因此不会读到写操作中间的内容，这就是读写快照隔离。leveldb可以通过快照隔离来实现多次操作的原子插入。
+* 假设当前log sequence number的值为x， 这时进行的leveldb的写操作的sequence_number则为x + 1，但是写操作并不会马上修改全局sequence的值，而是在本次写操作结束后再将其修改为x + y, y为本次写操作的key-value对。如果在此次写操作进行过程中，有读操作发生，那么读操作获取的sequence为x，必定会小于正在进行中的写操作的sequence，因此不会读到写操作中间的内容，这就是读写快照隔离。leveldb可以通过快照隔离来实现多次操作的原子插入。
 
+### LRU Cache
 
-  
-### rocksdb feature
+>leveldb和rocksdb都通过lru cache来缓存block的数据, 当key所属的block在cache不存在时，才读区磁盘数据并加入cache中。
 
-> rocksdb 是基于leveldb实现的数据库存储引擎，实现了许多leveldb中没有的功能
+* lrucache的几个细节
+  * 第一个查询到key的请求，会将key所属的handle从lru list中摘掉，最后一个归还key的请求会将key重新插入lru list尾部。
+  * 每次插入新数据时，如果缓存空间已满，按顺讯从lru list的头部开始淘汰旧数据，由上一条可知，最新插入或者最新被归还的数据必定在lru list靠后的位置，因此会更晚被淘汰掉。
+  * 如果插入时， 淘汰完所有lru list的数据后内存空间仍然不足，则删除该插入数据或抛出异常（`strict_capacity_limit_`）。
+  * 归还handle时，如果自己为最后一个归还handle的请求，且此时lru空间已满，则清除掉此次归还的数据。
 
-### 事务
+## Rocksdb
 
-* rocksdb相较于leveldb的简易批量插入接口，
+### Rocksdb的事务隔离级别
 
-#### concurrently insert
-
-> leveldb的skiplist 仅支持单线程写入（修改），多线程读, rocksdb 为了提高写入效率实现了支持多线程插入的skiplist
-
-
-
+* 当未设置read option中的snapshot时，由于sequence number，所有的读写事务都是读已提交级别。
+* 当设置了read option中的snapshot时，rocksdb会获取事务开始时的log sequence number，之后的读取操作都会过滤掉sequence number等于大于该lsn number的key。此时事务的隔离级别为可重复读。
+* rocksdb的悲观事务会在每次Write时加锁，如果抢占锁失败则阻塞并等待至超时，此时的隔离级别仍然是可重复读。如果对于所有会被修改的Get操作都用GetForUpdate替代，则此时隔离级别为可串行华。
+* 由于上一点通常很难实现，因此可设置事务级别的SetSnapshot，如果之后插入中，发现
 
