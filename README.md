@@ -7,7 +7,7 @@
   * [数据分区](/ddia/ddia_6.md)
   * [事务](/ddia/ddia_7.md)
   * [分布式系统的挑战](/ddia/ddia_8.md)
-  * [分布式系统的挑战](/ddia/ddia_9.md)
+  * [一致性与共识](/ddia/ddia_9.md)
 * [论文笔记](/papers/README.md)
   * [google file system](/papers/gfs.md)
   * [bigtable](/papers/bigtable.md)
@@ -16,3 +16,4 @@
 * [项目笔记](/projects/README.md)
   * [leveldb](/projects/leveldb.md)
   * [倒排索引压缩](/projects/new_pfor_delta.md)
+  * [redis分布式锁](/projects/redis_lock.md)
