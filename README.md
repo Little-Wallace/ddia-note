@@ -15,5 +15,6 @@
   * [raft](/papers/raft.md)
 * [项目笔记](/projects/README.md)
   * [leveldb](/projects/leveldb.md)
+  * [rocksdb](/projects/rocksdb.md)
   * [倒排索引压缩](/projects/new_pfor_delta.md)
   * [redis分布式锁](/projects/redis_lock.md)

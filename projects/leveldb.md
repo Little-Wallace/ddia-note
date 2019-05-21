@@ -49,14 +49,6 @@ leveldb是一个写性能十分优秀的存储引擎，是典型的LSM树(Log St
   * 每次插入新数据时，如果缓存空间已满，按顺讯从lru list的头部开始淘汰旧数据，由上一条可知，最新插入或者最新被归还的数据必定在lru list靠后的位置，因此会更晚被淘汰掉。
   * 如果插入时， 淘汰完所有lru list的数据后内存空间仍然不足，则删除该插入数据或抛出异常（`strict_capacity_limit_`）。
   * 归还handle时，如果自己为最后一个归还handle的请求，且此时lru空间已满，则清除掉此次归还的数据。
+  
 
-## Rocksdb
-
-### Rocksdb的事务隔离级别
-
-* 当未设置read option中的snapshot时，由于sequence number，所有的读写事务都是读已提交级别。
-* 当设置了read option中的snapshot时，rocksdb会获取事务开始时的log sequence number，之后的读取操作都会过滤掉sequence number等于大于该lsn的key。此时事务的隔离级别为可重复读。
-* rocksdb的悲观事务会在每次Write时加锁，如果抢占锁失败则阻塞并等待至超时，此时的隔离级别仍然是可重复读。
-* 因此可设置事务级别的SetSnapshot，如果在插入时，发现修改的key已经具有一个更大的lsn，该事物回滚。
-* rocksdb由于没有gap锁，因此无法实现可串行化。（是否可由上层应用提供表级别锁以实现可串行化？）
 
